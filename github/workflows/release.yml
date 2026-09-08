@@ -1,4 +1,4 @@
-name: Release signed FYRO Print Agent
+name: Release FYRO Print Agent for Windows
 
 on:
   push:
@@ -20,8 +20,6 @@ jobs:
     runs-on: windows-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -32,12 +30,6 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Verify signing credentials
-        shell: pwsh
-        run: |
-          if (-not $env:CSC_LINK -or -not $env:CSC_KEY_PASSWORD) {
-            throw "Windows code-signing credentials are required."
-          }
       - name: Apply release version
         shell: pwsh
         env:
@@ -47,47 +39,5 @@ jobs:
           if ($version -notmatch "^\d+\.\d+\.\d+([+-][0-9A-Za-z.-]+)?$") { throw "Invalid semver: $version" }
           pnpm exec npm version $version --no-git-tag-version
       - run: pnpm run build
-      - name: Publish signed NSIS installer and update manifest
+      - name: Publish NSIS installer and update manifest
         run: pnpm exec electron-builder --config electron-builder.config.cjs --win --publish always
-
-  macos:
-    name: Build, notarize, and publish macOS installer
-    runs-on: macos-latest
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.26.1
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Verify signing and notarization credentials
-        run: |
-          test -n "$CSC_LINK"
-          test -n "$CSC_KEY_PASSWORD"
-          test -n "$APPLE_ID"
-          test -n "$APPLE_APP_SPECIFIC_PASSWORD"
-          test -n "$APPLE_TEAM_ID"
-      - name: Apply release version
-        env:
-          DISPATCH_VERSION: ${{ inputs.version }}
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            version="$DISPATCH_VERSION"
-          else
-            version="${GITHUB_REF_NAME#v}"
-          fi
-          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$'
-          pnpm exec npm version "$version" --no-git-tag-version
-      - run: pnpm run build
-      - name: Publish notarized DMG, ZIP, and update manifest
-        run: pnpm exec electron-builder --config electron-builder.config.cjs --mac --publish always
