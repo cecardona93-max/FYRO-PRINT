@@ -9,7 +9,7 @@ module.exports = {
   executableName: "fyro-print-agent",
   artifactName: "${productName}-${version}-${os}-${arch}.${ext}",
   directories: { output: "release", buildResources: "build" },
-  files: ["dist/**/*.js", "package.json"],
+  files: ["dist/**/*", "package.json"],
   asar: true,
   forceCodeSigning: false,
   publish,

@@ -78,8 +78,9 @@ function onboardingHtml(): string {
       </form>
     </main><script>
       const form=document.getElementById("form"),button=document.getElementById("submit"),error=document.getElementById("error");
-      window.fyroOnPairingData((value)=>{value=value||{};if(value.apiUrl)document.getElementById("apiUrl").value=value.apiUrl;if(value.pairingCode)document.getElementById("code").value=value.pairingCode;if(value.name)document.getElementById("name").value=value.name;});
+      if(typeof window.fyroOnPairingData==="function")window.fyroOnPairingData((value)=>{value=value||{};if(value.apiUrl)document.getElementById("apiUrl").value=value.apiUrl;if(value.pairingCode)document.getElementById("code").value=value.pairingCode;if(value.name)document.getElementById("name").value=value.name;});
       form.addEventListener("submit",async(e)=>{e.preventDefault();button.disabled=true;error.textContent="";
+        if(typeof window.fyroPair!=="function"){error.textContent="No se pudo iniciar el conector de FYRO. Reinstala la versión más reciente.";button.disabled=false;return;}
         const result=await window.fyroPair({apiUrl:document.getElementById("apiUrl").value, pairingCode:document.getElementById("code").value.trim(), name:document.getElementById("name").value.trim()});
         if(!result.ok){error.textContent=result.error;button.disabled=false;}else{document.body.innerHTML="<main><h1>Agente conectado</h1><p>FYRO está listo para imprimir. Esta ventana puede cerrarse; el agente seguirá activo en segundo plano.</p></main>";}
       });
@@ -94,7 +95,7 @@ function createOnboardingWindow(pairing?: typeof pendingPairing): void {
   }
   onboardingWindow = new BrowserWindow({
     width: 520, height: 570, resizable: false, title: "FYRO Print Agent",
-    webPreferences: { preload: join(currentDirectory, "print-agent-preload.js"), contextIsolation: true, nodeIntegration: false },
+    webPreferences: { preload: join(currentDirectory, "print-agent-preload.cjs"), contextIsolation: true, nodeIntegration: false },
   });
   if (pairing) onboardingWindow.webContents.once("did-finish-load", () => onboardingWindow?.webContents.send("pairing-data", pairing));
   onboardingWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(onboardingHtml())}`);
