@@ -11,7 +11,7 @@ module.exports = {
   directories: { output: "release", buildResources: "build" },
   files: ["dist/**/*.js", "package.json"],
   asar: true,
-  forceCodeSigning: true,
+  forceCodeSigning: false,
   publish,
   win: {
     target: [{ target: "nsis", arch: ["x64"] }],
@@ -25,16 +25,4 @@ module.exports = {
     createStartMenuShortcut: true,
     shortcutName: "FYRO Print Agent",
   },
-  mac: {
-    target: [
-      { target: "dmg", arch: ["universal"] },
-      { target: "zip", arch: ["universal"] },
-    ],
-    artifactName: "FYRO-Print-Agent.${ext}",
-    category: "public.app-category.business",
-    hardenedRuntime: true,
-    gatekeeperAssess: false,
-    notarize: true,
-  },
-  dmg: { title: "FYRO Print Agent" },
 };
