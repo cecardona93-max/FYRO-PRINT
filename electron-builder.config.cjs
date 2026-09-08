@@ -1,7 +1,7 @@
 const [githubOwner, githubRepo] = (process.env.GITHUB_REPOSITORY ?? "").split("/");
 const publish = githubOwner && githubRepo
   ? { provider: "github", owner: githubOwner, repo: githubRepo, releaseType: "release" }
-  : { provider: "generic", url: "https://app.fyro.co/downloads/print-agent/releases/" };
+  : { provider: "github", owner: "cecardona93-max", repo: "FYRO-PRINT", releaseType: "release" };
 
 module.exports = {
   appId: "co.fyro.print-agent",

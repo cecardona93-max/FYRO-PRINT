@@ -24,9 +24,43 @@ export type PrintAgentOptions = {
   onError?: (error: Error) => void;
 };
 
+function networkErrorMessage(error: unknown): string {
+  if (error instanceof DOMException && error.name === "TimeoutError") {
+    return "FYRO tardó demasiado en responder. Revisa la conexión a internet e inténtalo de nuevo.";
+  }
+  const cause = error instanceof Error ? (error.cause as NodeJS.ErrnoException | undefined) : undefined;
+  if (cause?.code === "ENOTFOUND" || cause?.code === "EAI_AGAIN") {
+    return "No se pudo encontrar el servidor de FYRO. Revisa la conexión a internet e inténtalo de nuevo.";
+  }
+  if (cause?.code?.startsWith("CERT_") || cause?.code?.includes("TLS")) {
+    return "Windows no pudo validar la conexión segura con FYRO. Revisa la fecha del equipo y la conexión a internet.";
+  }
+  return "No se pudo conectar con FYRO. Revisa la conexión a internet e inténtalo de nuevo.";
+}
+
+async function responseError(response: Response, fallback: string): Promise<Error> {
+  try {
+    const body = await response.json() as { error?: unknown };
+    if (typeof body.error === "string" && body.error.trim()) return new Error(body.error.trim());
+  } catch {
+    // The fallback below intentionally avoids exposing an unexpected response body.
+  }
+  return new Error(`${fallback} (${response.status}).`);
+}
+
 const defaultConfigPath = join(homedir(), ".fyro-print-agent.json");
+const legacyApiUrl = "https://app.fyro.co/api";
+const currentApiUrl = "https://www.fyroerp.com/api";
 const args = process.argv.slice(2);
 const arg = (name: string) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
+
+async function saveConfig(configPath: string, config: Config): Promise<void> {
+  await mkdir(homedir(), { recursive: true });
+  const temporary = `${configPath}.${process.pid}.tmp`;
+  await writeFile(temporary, JSON.stringify(config), { mode: 0o600 });
+  await rename(temporary, configPath);
+  await chmod(configPath, 0o600);
+}
 
 function run(command: string, arguments_: string[], env?: NodeJS.ProcessEnv): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -111,7 +145,12 @@ async function loadOrRegister(options: PrintAgentOptions): Promise<Config> {
   const configPath = options.configPath ?? defaultConfigPath;
   try {
     const stored = JSON.parse(await readFile(configPath, "utf8")) as Config;
-    return { ...stored, apiUrl: options.validateApiUrl ? options.validateApiUrl(stored.apiUrl) : stored.apiUrl };
+    const migrated = stored.apiUrl.replace(/\/$/, "") === legacyApiUrl
+      ? { ...stored, apiUrl: currentApiUrl }
+      : stored;
+    const config = { ...migrated, apiUrl: options.validateApiUrl ? options.validateApiUrl(migrated.apiUrl) : migrated.apiUrl };
+    if (migrated.apiUrl !== stored.apiUrl) await saveConfig(configPath, config);
+    return config;
   } catch (error) {
     if (error instanceof SyntaxError || (error as NodeJS.ErrnoException).code === "ENOENT") {
       // First launch continues into registration below.
@@ -124,17 +163,21 @@ async function loadOrRegister(options: PrintAgentOptions): Promise<Config> {
   const name = options.name ?? arg("--name");
   if (!apiUrl || !pairingCode || !name) throw new Error("First launch requires --api-url, --pairing-code, and --name.");
   const normalizedApiUrl = options.validateApiUrl ? options.validateApiUrl(apiUrl) : apiUrl.replace(/\/$/, "");
-  const response = await fetch(`${normalizedApiUrl}/print-agent/register`, {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ pairingCode, name, devices: await listPrintDevices() }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!response.ok) throw new Error(`Registration failed (${response.status}).`);
+  const devices = await listPrintDevices();
+  let response: Response;
+  try {
+    response = await fetch(`${normalizedApiUrl}/print-agent/register`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pairingCode, name, devices }),
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (error) {
+    throw new Error(networkErrorMessage(error), { cause: error });
+  }
+  if (!response.ok) throw await responseError(response, "FYRO rechazó el registro");
   const registered = await response.json() as { agentId: number; token: string };
   const config = { apiUrl: normalizedApiUrl, token: registered.token, agentId: registered.agentId, name };
-  await mkdir(homedir(), { recursive: true });
-  const temporary = `${configPath}.${process.pid}.tmp`;
-  await writeFile(temporary, JSON.stringify(config), { mode: 0o600 }); await rename(temporary, configPath); await chmod(configPath, 0o600);
+  await saveConfig(configPath, config);
   return config;
 }
 async function api(config: Config, endpoint: string, body?: unknown, timeoutMs = 20_000): Promise<Response> {

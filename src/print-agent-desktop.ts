@@ -7,7 +7,7 @@ import { startPrintAgent } from "./print-agent.js";
 const APP_PROTOCOL = "fyro-print-agent";
 const ONBOARDING_PROTOCOL = "fyro-print-agent-onboard";
 const { autoUpdater } = updater;
-const defaultApiUrl = "https://app.fyro.co/api";
+const defaultApiUrl = "https://www.fyroerp.com/api";
 let tray: Tray | undefined;
 let onboardingWindow: BrowserWindow | undefined;
 let stopAgent: (() => Promise<void>) | undefined;
@@ -34,13 +34,15 @@ function parsePairingUrl(value: string | undefined): typeof pendingPairing {
 
 function trustedApiUrl(value: string): string {
   const url = new URL(value);
-  const trustedProductionHost = url.hostname === "app.fyro.co" || url.hostname.endsWith(".fyro.co");
+  const trustedProductionHost = url.hostname === "www.fyroerp.com";
   const trustedDevelopmentHost = !app.isPackaged && ["localhost", "127.0.0.1"].includes(url.hostname);
   if (url.protocol !== "https:" && !trustedDevelopmentHost) throw new Error("La URL del agente debe usar HTTPS.");
   if (!trustedProductionHost && !trustedDevelopmentHost) throw new Error("La URL no pertenece a un servidor autorizado de FYRO.");
+  if (url.username || url.password || (url.port && !trustedDevelopmentHost)) throw new Error("La URL de FYRO contiene datos no permitidos.");
+  if (!["/api", "/api/"].includes(url.pathname)) throw new Error("La URL debe terminar en /api.");
   url.search = "";
   url.hash = "";
-  url.pathname = `${url.pathname.replace(/\/+$/, "") || ""}/`;
+  url.pathname = "/api";
   return url.toString().replace(/\/$/, "");
 }
 
