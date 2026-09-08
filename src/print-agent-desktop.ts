@@ -1,11 +1,12 @@
 import { app, BrowserWindow, ipcMain, nativeImage, protocol, Tray, Menu } from "electron";
-import { autoUpdater } from "electron-updater";
+import updater from "electron-updater";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { startPrintAgent } from "./print-agent.js";
 
 const APP_PROTOCOL = "fyro-print-agent";
+const { autoUpdater } = updater;
 const defaultApiUrl = "https://app.fyro.co/api";
 const currentDirectory = fileURLToPath(new URL(".", import.meta.url));
 let tray: Tray | undefined;
