@@ -37,7 +37,7 @@ jobs:
         run: |
           $version = if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") { $env:DISPATCH_VERSION } else { $env:GITHUB_REF_NAME -replace "^v", "" }
           if ($version -notmatch "^\d+\.\d+\.\d+([+-][0-9A-Za-z.-]+)?$") { throw "Invalid semver: $version" }
-          pnpm exec npm version $version --no-git-tag-version
+          pnpm exec npm version $version --no-git-tag-version --allow-same-version
       - run: pnpm run build
       - name: Publish NSIS installer and update manifest
         run: pnpm exec electron-builder --config electron-builder.config.cjs --win --publish always
