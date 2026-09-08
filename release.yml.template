@@ -1,0 +1,54 @@
+name: Release FYRO Print Agent for Windows
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semver to publish, without a leading v
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Build and publish Windows installer
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply release version
+        shell: pwsh
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          $version = if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") { $env:DISPATCH_VERSION } else { $env:GITHUB_REF_NAME -replace "^v", "" }
+          if ($version -notmatch "^\d+\.\d+\.\d+([+-][0-9A-Za-z.-]+)?$") { throw "Invalid semver: $version" }
+          pnpm exec npm version $version --no-git-tag-version --allow-same-version
+          "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Ensure a single GitHub release
+        shell: pwsh
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          $tag = if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") { "v$env:DISPATCH_VERSION" } else { $env:GITHUB_REF_NAME }
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --target $env:GITHUB_SHA --title $env:RELEASE_VERSION --generate-notes
+          }
+      - run: pnpm run build
+      - name: Publish NSIS installer and update manifest
+        run: pnpm exec electron-builder --config electron-builder.config.cjs --win --publish always
